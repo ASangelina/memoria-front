@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MEMORIA — Historical Heritage Discovery Platform</title>
+  
+  <!-- Fonts: Playfair Display for editorial headers & Plus Jakarta Sans for UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            parchment: {
+              50: '#FDFBF7',
+              100: '#F9F6F0',
+              200: '#F2EDE4',
+              300: '#E5DDCF',
+              400: '#D5C7B1',
+            },
+            moss: {
+              800: '#2D4A3E',
+              900: '#1B3B2B',
+              950: '#10261B',
+            },
+            bronze: {
+              400: '#D4AF37',
+              500: '#C5A059',
+              600: '#9E7B3B',
+              700: '#7A5E2B',
+            },
+            charcoal: {
+              800: '#2C3032',
+              900: '#1A1D1E',
+              950: '#111314',
+            }
+          },
+          fontFamily: {
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & Dependencies -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      background-color: #F9F6F0;
+      color: #1A1D1E;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow-x: hidden;
+    }
+    .font-editorial {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F2EDE4;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #C5A059;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #9E7B3B;
+    }
+    /* Leaflet popup styling overrides */
+    .leaflet-popup-content-wrapper {
+      background: #F9F6F0;
+      color: #1A1D1E;
+      border: 1px solid #C5A059;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      padding: 4px;
+    }
+    .leaflet-popup-tip {
+      background: #F9F6F0;
+      border: 1px solid #C5A059;
+    }
+    .custom-marker {
+      transition: all 0.2s ease-in-out;
+    }
+    .custom-marker:hover {
+      transform: scale(1.25);
+    }
+  </style>
+</head>
+<body class="bg-parchment-100 text-charcoal-900 selection:bg-bronze-500 selection:text-white">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // --- ARCHIVAL DATA & GROUNDED RAG SERVICE ---
+    const HISTORICAL_ENTITIES = [
+      {
+        id: 'mario-de-andrade',
+        name: 'Mário de Andrade',
+        category: 'personality',
+        type: 'Poet, Novelist & Musicologist',
+        years: '1893 — 1945',
+        coords: [-23.5485, -46.6562],
+        image: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Pioneer of Brazilian Modernism and author of "Macunaíma". Central advocate for national heritage preservation.',
+        fullBio: 'Mário Raul de Morais Andrade was a novelist, poet, art critic, and musicologist. As one of the main founders of Brazilian modernism, he virtually created modern poetry in Brazil with his 1922 publication Paulicéia Desvairada. He led the Department of Culture of São Paulo and established the national heritage protection service (predecessor of IPHAN).',
+        artisticDetails: 'Modest tomb in Section 41 with solemn modernist inscriptions reflecting his cultural austerity.',
+        importance: 'Formulated Brazil’s first official cultural policies and documented folklore across South America.',
+        sector: 'Section 41, Plot 12',
+        sources: [
+          { doc: 'Consolação Cemetery Heritage Guide', page: 42, author: 'São Paulo Culture Division' },
+          { doc: 'Dictionary of Plastic Arts in Brazil', page: 118, author: 'Marta Rossetti' }
+        ]
+      },
+      {
+        id: 'o-sepultamento',
+        name: 'O Sepultamento (The Burial)',
+        category: 'sculpture',
+        type: 'Granite Sculpture & Tomb Art',
+        years: '1923',
+        coords: [-23.5492, -46.6552],
+        image: 'https://images.unsplash.com/photo-1561839561-b13bcfe95249?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Masterpiece by Victor Brecheret. Awarded at the prestigious Salon d\'Automne in Paris in 1923.',
+        fullBio: 'Created in Paris by Victor Brecheret, this monumental sculpture portrays the sorrow of the Virgin Mary and mourning figures holding Christ. The synthetic Art Déco lines and stylized anatomical volumes marked a paradigm shift in South American tomb art.',
+        artisticDetails: 'Hand-carved granite resting over the Olívia Guedes Penteado family mausoleum.',
+        importance: 'Pivotal transition mark from academic classicism to modern sculpture in public funerary spaces.',
+        sector: 'Central Avenue, Sector 3',
+        sources: [
+          { doc: 'Victor Brecheret Public Art Catalog', page: 15, author: 'Brecheret Institute' },
+          { doc: 'Masterpieces of 20th Century Sacred Art', page: 88, author: 'MASP Editorial' }
+        ]
+      },
+      {
+        id: 'tarsila-do-amaral',
+        name: 'Tarsila do Amaral',
+        category: 'personality',
+        type: 'Modernist Painter',
+        years: '1886 — 1973',
+        coords: [-23.5478, -46.6558],
+        image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Leading figure of Modern Art in Latin America and painter of the iconic "Abaporu" and "Antropofagia".',
+        fullBio: 'Tarsila do Amaral was a Brazilian painter, draftsman, and translator. Member of the "Group of Five", her vibrant colors, tropical motifs, and Brazilian subjects defined the Anthropophagic Movement and redefined Latin American art globally.',
+        artisticDetails: 'Sober family tomb decorated with clean geometric lines and floral motifs.',
+        importance: 'Her artistic legacy placed Brazilian visual culture on the global modern art map.',
+        sector: 'Section 22, Plot 4',
+        sources: [
+          { doc: 'Tarsila: Catalogue Raisonné', page: 204, author: 'SP Art Foundation Archive' }
+        ]
+      },
+      {
+        id: 'monteiro-lobato',
+        name: 'Monteiro Lobato',
+        category: 'personality',
+        type: 'Author, Publisher & Industrial Pioneer',
+        years: '1882 — 1948',
+        coords: [-23.5498, -46.6565],
+        image: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Creator of "Sítio do Picapau Amarelo" and pioneer of modern book publishing and oil exploration in Brazil.',
+        fullBio: 'José Bento Monteiro Lobato reshaped Brazilian children\'s literature and established the country\'s first major independent publishing houses. He was also a passionate campaigner for national industrial infrastructure and petroleum independence.',
+        artisticDetails: 'Family resting place visited by scholars and literature delegations.',
+        importance: 'Fostered literacy and reading culture across multiple generations in 20th-century Brazil.',
+        sector: 'Section 15, Plot 8',
+        sources: [
+          { doc: 'History of Brazilian Publishing', page: 67, author: 'Brasil Editorial Archives' }
+        ]
+      },
+      {
+        id: 'grande-anjo',
+        name: 'The Great Angel of Consolação',
+        category: 'sculpture',
+        type: 'Carrara Marble Monument',
+        years: '1910',
+        coords: [-23.5481, -46.6548],
+        image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Neoclassical masterpiece carved in Italy by Luigi Brizzolara. One of the tallest statues in the cemetery.',
+        fullBio: 'Carved from a single massive block of pure Carrara marble, this guardian angel stands over 3.5 meters tall with outstretched wings. The drapery technique and intricate feather details exemplify virtuosic Italian craftsmanship imported by São Paulo coffee elites.',
+        artisticDetails: 'Imported Carrara marble, weighing over 4 metric tons.',
+        importance: 'Exemplifies the opulence and eclectic tastes of the coffee boom period in early 1900s São Paulo.',
+        sector: 'Main Avenue, Quadra 5',
+        sources: [
+          { doc: 'Funerary Sculptures of São Paulo', page: 112, author: 'Prof. Dr. Nelson A. Silva' }
+        ]
+      },
+      {
+        id: 'ramos-de-azevedo',
+        name: 'Ramos de Azevedo',
+        category: 'personality',
+        type: 'Architect & Urban Planner',
+        years: '1851 — 1928',
+        coords: [-23.5489, -46.6570],
+        image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Architect behind Theatro Municipal, Pinacoteca, and Mercado Municipal in São Paulo.',
+        fullBio: 'Francisco de Paula Ramos de Azevedo shaped the architectural identity of São Paulo during its rapid industrial explosion. His firm designed the city\'s most iconic civic buildings and established high engineering standards.',
+        artisticDetails: 'Imposing neoclassical family mausoleum featuring Ionic columns and marble relief crests.',
+        importance: 'Defined the visual cityscape and public architecture of São Paulo at the turn of the century.',
+        sector: 'Section 1, Main Plaza',
+        sources: [
+          { doc: 'Paulistano Architecture Registry', page: 33, author: 'FAU-USP Documentation' }
+        ]
+      },
+      {
+        id: 'marquesa-de-santos',
+        name: 'Marquesa de Santos (Domitila de Castro)',
+        category: 'personality',
+        type: 'Imperial Noblewoman & Philanthropist',
+        years: '1797 — 1867',
+        coords: [-23.5495, -46.6542],
+        image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80&w=600',
+        shortBio: 'Prominent figure of Brazil\'s First Empire and generous benefactor of São Paulo education.',
+        fullBio: 'Domitila de Castro Canto e Melo was the famous Marchioness of Santos. After her imperial years, she returned to São Paulo where she became renowned for her extensive charity work, financing law students and founding healthcare shelters.',
+        artisticDetails: 'Historic tomb frequently decorated with flowers by local devotees and historians.',
+        importance: 'One of the most influential female figures in 19th-century Brazilian political and social history.',
+        sector: 'Section 8, Plot 2',
+        sources: [
+          { doc: 'Domitila: Imperial Archival Papers', page: 189, author: 'São Paulo State Archives' }
+        ]
+      }
+    ];
+
+    const GUIDED_ROUTES = [
+      {
+        id: 'route-modernist',
+        title: 'Modernist Masters Itinerary',
+        duration: '45 mins',
+        distance: '850 meters',
+        category: 'Art & Literature',
+        description: 'Explore the resting places and monuments of pioneers who spearheaded the 1922 Modern Art Week.',
+        stops: [
+          { title: 'O Sepultamento Sculpture', type: 'Monument', sector: 'Central Avenue' },
+          { title: 'Mário de Andrade Tomb', type: 'Personality', sector: 'Section 41' },
+          { title: 'Tarsila do Amaral Tomb', type: 'Personality', sector: 'Section 22' }
+        ]
+      },
+      {
+        id: 'route-sculpture',
+        title: 'Open-Air Sculpture Circuit',
+        duration: '60 mins',
+        distance: '1.2 km',
+        category: 'Sculpture & Architecture',
+        description: 'A curated walk highlighting imported Carrara marble statues, bronze art déco pieces, and neoclassical mausoleums.',
+        stops: [
+          { title: 'The Great Angel of Consolação', type: 'Sculpture', sector: 'Quadra 5' },
+          { title: 'Ramos de Azevedo Mausoleum', type: 'Architecture', sector: 'Main Plaza' },
+          { title: 'O Sepultamento (Brecheret)', type: 'Sculpture', sector: 'Central Avenue' }
+        ]
+      }
+    ];
+
+    // Simulated RAG Service for MEMORIA AI
+    const MemoriaAIService = {
+      async query(userPrompt, selectedContextEntity = null) {
+        await new Promise(r => setTimeout(r, 850));
+
+        const promptLower = userPrompt.toLowerCase();
+
+        // 1. Context Specific Query
+        if (selectedContextEntity) {
+          const item = HISTORICAL_ENTITIES.find(e => e.id === selectedContextEntity.id || e.name.toLowerCase().includes(selectedContextEntity.name.toLowerCase()));
+          if (item) {
+            return {
+              text: `Regarding **${item.name}** (${item.years || item.type}):\n\n${item.fullBio}\n\n**Historical Significance:** ${item.importance}\n\n**Location & Art Details:** Located at ${item.sector}. ${item.artisticDetails}`,
+              citations: item.sources || [],
+              relatedIds: [item.id]
+            };
+          }
+        }
+
+        // 2. Victor Brecheret query
+        if (promptLower.includes('brecheret') || promptLower.includes('sculpture') || promptLower.includes('burial') || promptLower.includes('sepultamento')) {
+          return {
+            text: "Victor Brecheret (1894–1955) was a seminal master of modern sculpture in Brazil. His most renowned masterpiece in Consolação Cemetery is **'O Sepultamento' (The Burial)**, carved in 1923.\n\nThe piece portrays the solemn sorrow of Mary and mourning women supporting Christ. It won the Silver Medal at the Paris Salon d'Automne in 1923 and is located at the Olívia Guedes Penteado mausoleum.",
+            citations: [
+              { doc: 'Victor Brecheret Public Art Catalog', page: 15, author: 'Brecheret Institute' },
+              { doc: 'Funerary Heritage of São Paulo', page: 77, author: 'Division of Cultural Preservation' }
+            ],
+            relatedIds: ['o-sepultamento']
+          };
+        }
+
+        // 3. Mário de Andrade / Tomb location query
+        if (promptLower.includes('mário') || promptLower.includes('mario') || promptLower.includes('andrade') || promptLower.includes('tomb') || promptLower.includes('where')) {
+          return {
+            text: "The tomb of **Mário de Andrade** (1893–1945) is located in **Section 41** of Consolação Cemetery.\n\nIt is a humble headstone reflecting his commitment to cultural austerity. As founder of SPHAN (now IPHAN), Mário de Andrade pioneered the cataloging and legal protection of Brazilian open-air art and historical tombs.",
+            citations: [
+              { doc: 'Consolação Cemetery Heritage Guide', page: 42, author: 'São Paulo Culture Division' }
+            ],
+            relatedIds: ['mario-de-andrade']
+          };
+        }
+
+        // 4. Guided Itinerary Query
+        if (promptLower.includes('route') || promptLower.includes('tour') || promptLower.includes('itinerary') || promptLower.includes('walk')) {
+          return {
+            text: "I recommend the **Modernist Masters Itinerary (45 minutes)**:\n\n1. **Main Entrance (Consolação St.)** — Welcome plaza & 1858 founding landmark.\n2. **Stop 1: O Sepultamento (Brecheret)** — Modern art déco expressionism in granite.\n3. **Stop 2: Mário de Andrade Tomb** — Homage to the literary leader of 1922.\n4. **Stop 3: Tarsila do Amaral Tomb** — Resting site of Brazil's modern painting icon.\n\n*You can select 'Guided Routes' in the navigation bar to trace this tour on the map!*",
+            citations: [
+              { doc: 'Cultural Education Routes of SP', page: 12, author: 'Heritage Division' }
+            ],
+            relatedIds: ['o-sepultamento', 'mario-de-andrade', 'tarsila-do-amaral']
+          };
+        }
+
+        // 5. Unverified / Out of Document Bounds Handling
+        if (promptLower.includes('ghost') || promptLower.includes('haunted') || promptLower.includes('secret') || promptLower.includes('price')) {
+          return {
+            text: "⚠️ **Information Not Found in Verified Archival Documents**\n\nAs a grounded historical guide operating strictly on verified municipal catalogs and archival papers, I have no historiographical evidence or documented records regarding this query in the Consolação Cemetery collection.\n\n*MEMORIA AI relies strictly on primary documents, tomb registries, and peer-reviewed articles to prevent cultural hallucination.*",
+            citations: [],
+            isUnverified: true
+          };
+        }
+
+        // Default Response
+        return {
+          text: "**Consolação Cemetery** (founded in 1858) is São Paulo's oldest municipal necropolis, functioning as an open-air museum housing over 300 cataloged sculptures by master artists like Victor Brecheret, Luigi Brizzolara, and Galileo Emendabili.\n\nProminent figures interred include Mário de Andrade, Tarsila do Amaral, Monteiro Lobato, Ramos de Azevedo, and the Marchioness of Santos.",
+          citations: [
+            { doc: 'Consolação Cemetery: Open Air Museum', page: 4, author: 'SEME / SP Cultural Heritage' }
+          ],
+          relatedIds: ['mario-de-andrade', 'o-sepultamento', 'tarsila-do-amaral']
+        };
+      }
+    };
+
+    // --- MAIN REACT APPLICATION ---
+    function App() {
+      const [activeTab, setActiveTab] = useState('home'); // home, map, personalities, sculptures, routes
+      const [selectedEntity, setSelectedEntity] = useState(null);
+      const [filterCategory, setFilterCategory] = useState('all');
+      const [searchQuery, setSearchQuery] = useState('');
+      
+      // AI Drawer State
+      const [isAiOpen, setIsAiOpen] = useState(false);
+      const [aiContextEntity, setAiContextEntity] = useState(null);
+      const [chatMessages, setChatMessages] = useState([
+        {
+          sender: 'ai',
+          text: 'Welcome to **MEMORIA AI**. I am your grounded historical guide powered by verified archival documents. How may I assist your exploration of Consolação Cemetery today?',
+          citations: []
+        }
+      ]);
+      const [aiInput, setAiInput] = useState('');
+      const [isAiThinking, setIsAiThinking] = useState(false);
+      
+      // Toast notice
+      const [toastNotice, setToastNotice] = useState(true);
+
+      // Icon trigger update helper
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [activeTab, isAiOpen, selectedEntity]);
+
+      // Query AI handler
+      const handleAskAi = async (promptText, contextItem = null) => {
+        setIsAiOpen(true);
+        const userMsg = promptText || aiInput;
+        if (!userMsg.trim()) return;
+
+        setAiInput('');
+        const updatedMsgs = [...chatMessages, { sender: 'user', text: userMsg }];
+        setChatMessages(updatedMsgs);
+        setIsAiThinking(true);
+
+        try {
+          const response = await MemoriaAIService.query(userMsg, contextItem || aiContextEntity);
+          setChatMessages([
+            ...updatedMsgs,
+            {
+              sender: 'ai',
+              text: response.text,
+              citations: response.citations,
+              relatedIds: response.relatedIds,
+              isUnverified: response.isUnverified
+            }
+          ]);
+        } catch (err) {
+          setChatMessages([
+            ...updatedMsgs,
+            { sender: 'ai', text: 'An error occurred while accessing the historical archives. Please try again.' }
+          ]);
+        } finally {
+          setIsAiThinking(false);
+        }
+      };
+
+      // Context Ask Trigger
+      const openAiWithContext = (entity) => {
+        setAiContextEntity(entity);
+        setIsAiOpen(true);
+        handleAskAi(`Tell me the detailed history and significance of ${entity.name}`, entity);
+      };
+
+      // Filtered items
+      const filteredEntities = useMemo(() => {
+        return HISTORICAL_ENTITIES.filter(item => {
+          const matchesCategory = filterCategory === 'all' || item.category === filterCategory;
+          const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                item.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                item.shortBio.toLowerCase().includes(searchQuery.toLowerCase());
+          return matchesCategory && matchesSearch;
+        });
+      }, [filterCategory, searchQuery]);
+
+      return (
+        <div className="min-h-screen flex flex-col bg-parchment-100 text-charcoal-900 relative font-sans">
+          
+          {/* HEADER / TOP NAVIGATION */}
+          <header className="sticky top-0 z-40 bg-parchment-100/90 backdrop-blur-md border-b border-bronze-500/20 px-4 lg:px-8 py-3.5 shadow-sm">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              
+              {/* Brand Logo */}
+              <div 
+                onClick={() => setActiveTab('home')}
+                className="cursor-pointer flex items-center space-x-3 group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-moss-900 flex items-center justify-center text-bronze-400 font-editorial text-2xl font-bold border border-bronze-500/40 shadow-sm group-hover:bg-moss-800 transition">
+                  M
+                </div>
+                <div>
+                  <h1 className="font-editorial text-2xl font-bold tracking-tight text-moss-950 flex items-center gap-2">
+                    MEMORIA
+                    <span className="text-[10px] tracking-widest font-sans uppercase font-bold px-2 py-0.5 rounded bg-bronze-500/10 text-bronze-700 border border-bronze-500/30">
+                      Consolação
+                    </span>
+                  </h1>
+                  <p className="text-[10px] text-charcoal-800/70 tracking-widest uppercase font-semibold hidden sm:block">
+                    Historical Heritage & Discovery Platform
+                  </p>
+                </div>
+              </div>
+
+              {/* Navigation Links */}
+              <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-xs font-semibold uppercase tracking-wider">
+                <button
+                  onClick={() => setActiveTab('home')}
+                  className={`px-3.5 py-2 rounded-lg transition ${activeTab === 'home' ? 'bg-moss-900 text-parchment-100 shadow-sm' : 'text-charcoal-800 hover:bg-parchment-200'}`}
+                >
+                  Home
+                </button>
+                <button
+                  onClick={() => setActiveTab('map')}
+                  className={`px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 ${activeTab === 'map' ? 'bg-moss-900 text-parchment-100 shadow-sm' : 'text-charcoal-800 hover:bg-parchment-200'}`}
+                >
+                  <i data-lucide="map" className="w-3.5 h-3.5 text-bronze-500"></i>
+                  Map Explorer
+                </button>
+                <button
+                  onClick={() => setActiveTab('personalities')}
+                  className={`px-3.5 py-2 rounded-lg transition ${activeTab === 'personalities' ? 'bg-moss-900 text-parchment-100 shadow-sm' : 'text-charcoal-800 hover:bg-parchment-200'}`}
+                >
+                  Personalities
+                </button>
+                <button
+                  onClick={() => setActiveTab('sculptures')}
+                  className={`px-3.5 py-2 rounded-lg transition ${activeTab === 'sculptures' ? 'bg-moss-900 text-parchment-100 shadow-sm' : 'text-charcoal-800 hover:bg-parchment-200'}`}
+                >
+                  Sculptures
+                </button>
+                <button
+                  onClick={() => setActiveTab('routes')}
+                  className={`px-3.5 py-2 rounded-lg transition ${activeTab === 'routes' ? 'bg-moss-900 text-parchment-100 shadow-sm' : 'text-charcoal-800 hover:bg-parchment-200'}`}
+                >
+                  Guided Routes
+                </button>
+              </nav>
+
+              {/* AI Trigger Button */}
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setIsAiOpen(!isAiOpen)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-moss-900 to-moss-800 text-parchment-100 px-4 py-2 rounded-full border border-bronze-500/40 text-xs font-bold tracking-wide shadow-sm hover:shadow-md transition active:scale-95"
+                >
+                  <i data-lucide="sparkles" className="w-4 h-4 text-bronze-400 animate-pulse"></i>
+                  <span>MEMORIA AI</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* MOBILE TABS BAR */}
+          <div className="md:hidden bg-parchment-200 border-b border-bronze-500/20 px-2 py-2 flex justify-around text-xs font-semibold text-charcoal-800">
+            <button onClick={() => setActiveTab('home')} className={`px-2 py-1 rounded ${activeTab === 'home' ? 'bg-moss-900 text-white' : ''}`}>Home</button>
+            <button onClick={() => setActiveTab('map')} className={`px-2 py-1 rounded ${activeTab === 'map' ? 'bg-moss-900 text-white' : ''}`}>Map</button>
+            <button onClick={() => setActiveTab('personalities')} className={`px-2 py-1 rounded ${activeTab === 'personalities' ? 'bg-moss-900 text-white' : ''}`}>People</button>
+            <button onClick={() => setActiveTab('sculptures')} className={`px-2 py-1 rounded ${activeTab === 'sculptures' ? 'bg-moss-900 text-white' : ''}`}>Art</button>
+            <button onClick={() => setActiveTab('routes')} className={`px-2 py-1 rounded ${activeTab === 'routes' ? 'bg-moss-900 text-white' : ''}`}>Routes</button>
+          </div>
+
+          {/* STATUS BANNER */}
+          {toastNotice && (
+            <div className="bg-moss-950 text-parchment-200 text-xs px-4 py-2 border-b border-bronze-600/30">
+              <div className="max-w-7xl mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <p>
+                    <strong className="text-bronze-400 font-semibold">Grounded RAG Pipeline Ready:</strong> Consolação Cemetery Archives Connected • Gemma 4 Model Active.
+                  </p>
+                </div>
+                <button onClick={() => setToastNotice(false)} className="text-parchment-400 hover:text-white">
+                  <i data-lucide="x" className="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* MAIN CONTENT AREA */}
+          <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8">
+            
+            {/* VIEW 1: HOME PAGE */}
+            {activeTab === 'home' && (
+              <div className="space-y-12">
+                
+                {/* HERO BANNER */}
+                <section className="relative rounded-2xl overflow-hidden border border-bronze-500/30 bg-moss-950 text-parchment-100 p-8 md:p-14 shadow-2xl">
+                  <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#C5A059_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                  
+                  <div className="relative z-10 max-w-3xl space-y-6">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-bronze-500/10 border border-bronze-500/30 text-bronze-400 text-xs font-bold uppercase tracking-widest">
+                      <i data-lucide="landmark" className="w-3.5 h-3.5"></i>
+                      São Paulo • Founded 1858
+                    </div>
+
+                    <h2 className="font-editorial text-4xl md:text-6xl font-bold tracking-tight text-parchment-50 leading-tight">
+                      Every place has a story.<br/>
+                      <span className="italic font-normal text-bronze-400">Every story deserves to live.</span>
+                    </h2>
+
+                    <p className="text-parchment-300 text-base md:text-lg font-light leading-relaxed">
+                      "We are not building a map of the dead. We are building a way for the living to remember." Discover 160+ years of Brazilian literature, sculpture, and living history at Consolação Cemetery.
+                    </p>
+
+                    {/* HERO AI INPUT BAR */}
+                    <div className="pt-4">
+                      <div className="bg-parchment-100 text-charcoal-900 rounded-xl p-2 shadow-2xl border-2 border-bronze-500 flex items-center gap-2">
+                        <i data-lucide="sparkles" className="w-5 h-5 text-bronze-600 ml-2 shrink-0"></i>
+                        <input
+                          type="text"
+                          placeholder="Ask MEMORIA AI (e.g. Where is Mário de Andrade buried?)"
+                          className="flex-1 bg-transparent px-2 py-2 text-sm md:text-base outline-none placeholder:text-charcoal-800/50"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleAskAi(e.target.value);
+                          }}
+                        />
+                        <button
+                          onClick={(e) => {
+                            const input = e.currentTarget.previousElementSibling;
+                            handleAskAi(input.value);
+                          }}
+                          className="bg-moss-900 hover:bg-moss-800 text-parchment-100 px-5 py-2.5 rounded-lg text-sm font-semibold transition flex items-center gap-2 shrink-0"
+                        >
+                          <span>Ask AI</span>
+                          <i data-lucide="arrow-right" className="w-4 h-4 text-bronze-400"></i>
+                        </button>
+                      </div>
+
+                      {/* Prompts */}
+                      <div className="flex flex-wrap gap-2 mt-3 text-xs">
+                        <span className="text-parchment-400 font-medium">Try asking:</span>
+                        {[
+                          "Who was Victor Brecheret?",
+                          "Suggest a 45 min tour",
+                          "Where is Tarsila do Amaral buried?"
+                        ].map((prompt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleAskAi(prompt)}
+                            className="text-parchment-300 hover:text-bronze-400 bg-moss-900/80 hover:bg-moss-900 px-3 py-1 rounded-md border border-bronze-500/20 transition text-left"
+                          >
+                            "{prompt}"
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-4 text-xs text-parchment-400 font-medium">
+                      <button 
+                        onClick={() => setActiveTab('map')} 
+                        className="inline-flex items-center gap-2 underline hover:text-bronze-400 transition"
+                      >
+                        <i data-lucide="map-pin" className="w-4 h-4 text-bronze-500"></i>
+                        Open Interactive Map Explorer
+                      </button>
+                      <span>•</span>
+                      <span>300+ Cataloged Artworks & Tombs</span>
+                    </div>
+
+                  </div>
+                </section>
+
+                {/* FEATURED ENTITIES */}
+                <section className="space-y-6">
+                  <div className="flex items-end justify-between border-b border-bronze-500/20 pb-4">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-widest text-bronze-600">Curated Collection</span>
+                      <h3 className="font-editorial text-2xl md:text-3xl font-bold text-moss-950">
+                        Iconic Personalities & Masterpieces
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('personalities')}
+                      className="text-xs font-bold uppercase tracking-wider text-moss-900 hover:text-bronze-600 transition flex items-center gap-1"
+                    >
+                      View All Archive
+                      <i data-lucide="chevron-right" className="w-4 h-4"></i>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {HISTORICAL_ENTITIES.slice(0, 3).map((item) => (
+                      <div 
+                        key={item.id}
+                        className="bg-parchment-50 rounded-xl border border-bronze-500/30 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col group"
+                      >
+                        <div className="h-48 overflow-hidden relative bg-charcoal-900">
+                          <img 
+                            src={item.image} 
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-90" 
+                          />
+                          <span className="absolute top-3 left-3 bg-moss-950/90 backdrop-blur-sm text-bronze-400 border border-bronze-500/30 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                            {item.type}
+                          </span>
+                        </div>
+                        
+                        <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                          <div>
+                            <h4 className="font-editorial text-xl font-bold text-moss-950">{item.name}</h4>
+                            <p className="text-xs text-bronze-600 font-semibold mb-2">{item.years}</p>
+                            <p className="text-xs text-charcoal-800/80 line-clamp-3 leading-relaxed">
+                              {item.shortBio}
+                            </p>
+                          </div>
+
+                          <div className="pt-3 border-t border-parchment-300/80 flex items-center justify-between gap-2 text-xs">
+                            <button
+                              onClick={() => {
+                                setSelectedEntity(item);
+                                setActiveTab('map');
+                              }}
+                              className="text-moss-900 font-bold hover:underline flex items-center gap-1"
+                            >
+                              <i data-lucide="map-pin" className="w-3.5 h-3.5 text-bronze-600"></i>
+                              Locate on Map
+                            </button>
+                            
+                            <button
+                              onClick={() => openAiWithContext(item)}
+                              className="bg-moss-900 hover:bg-moss-800 text-parchment-100 px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1"
+                            >
+                              <i data-lucide="sparkles" className="w-3 h-3 text-bronze-400"></i>
+                              Ask AI
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* PHILOSOPHY SECTION */}
+                <section className="bg-parchment-200/70 border border-bronze-500/30 rounded-2xl p-8 flex flex-col md:flex-row items-center gap-8">
+                  <div className="w-16 h-16 rounded-2xl bg-moss-900 flex items-center justify-center text-bronze-400 shrink-0 border border-bronze-500/40 shadow-inner">
+                    <i data-lucide="cpu" className="w-8 h-8"></i>
+                  </div>
+                  <div className="space-y-2 flex-1">
+                    <h3 className="font-editorial text-2xl font-bold text-moss-950">
+                      Grounded AI Powered by Primary Historical Documents
+                    </h3>
+                    <p className="text-sm text-charcoal-800/80 leading-relaxed">
+                      MEMORIA AI relies on a Retrieval-Augmented Generation (RAG) architecture linked directly to verified tomb registries, heritage conservation records (IPHAN/CONDEPHAAT), and academic citations. It never invents biographical facts and explicitly cites source documents.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAiOpen(true)}
+                    className="bg-moss-900 hover:bg-moss-800 text-parchment-100 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider whitespace-nowrap border border-bronze-500/30 shadow transition"
+                  >
+                    Launch AI Studio
+                  </button>
+                </section>
+
+              </div>
+            )}
+
+            {/* VIEW 2: MAP EXPLORER */}
+            {activeTab === 'map' && (
+              <div className="h-[calc(100vh-140px)] min-h-[500px] rounded-xl border border-bronze-500/30 bg-parchment-50 overflow-hidden flex flex-col md:flex-row shadow-xl">
+                
+                {/* MAP SIDEBAR */}
+                <div className="w-full md:w-80 lg:w-96 border-r border-bronze-500/20 bg-parchment-100/90 flex flex-col h-1/2 md:h-full z-10">
+                  <div className="p-4 border-b border-bronze-500/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-editorial text-lg font-bold text-moss-950">Heritage Explorer</h3>
+                      <span className="text-[10px] bg-bronze-500/20 text-bronze-700 px-2 py-0.5 rounded font-bold uppercase">
+                        {filteredEntities.length} Landmarks
+                      </span>
+                    </div>
+
+                    {/* Search Input */}
+                    <div className="relative">
+                      <i data-lucide="search" className="w-4 h-4 absolute left-3 top-3 text-charcoal-800/50"></i>
+                      <input
+                        type="text"
+                        placeholder="Search name, artist, sector..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-parchment-50 border border-bronze-500/30 rounded-lg outline-none focus:border-bronze-600"
+                      />
+                    </div>
+
+                    {/* Category Filter */}
+                    <div className="flex gap-1 text-xs">
+                      <button
+                        onClick={() => setFilterCategory('all')}
+                        className={`flex-1 py-1.5 rounded text-center transition ${filterCategory === 'all' ? 'bg-moss-900 text-white font-semibold' : 'bg-parchment-200 text-charcoal-800'}`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setFilterCategory('personality')}
+                        className={`flex-1 py-1.5 rounded text-center transition ${filterCategory === 'personality' ? 'bg-moss-900 text-white font-semibold' : 'bg-parchment-200 text-charcoal-800'}`}
+                      >
+                        People
+                      </button>
+                      <button
+                        onClick={() => setFilterCategory('sculpture')}
+                        className={`flex-1 py-1.5 rounded text-center transition ${filterCategory === 'sculpture' ? 'bg-moss-900 text-white font-semibold' : 'bg-parchment-200 text-charcoal-800'}`}
+                      >
+                        Artworks
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* List of Landmarks */}
+                  <div className="flex-1 overflow-y-auto divide-y divide-bronze-500/10">
+                    {filteredEntities.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedEntity(item)}
+                        className={`p-3.5 cursor-pointer transition flex items-start gap-3 hover:bg-parchment-200/80 ${selectedEntity?.id === item.id ? 'bg-bronze-500/15 border-l-4 border-bronze-600' : ''}`}
+                      >
+                        <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-charcoal-800">
+                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-editorial text-sm font-bold text-moss-950 truncate">{item.name}</h4>
+                          <p className="text-[11px] text-bronze-600 font-semibold">{item.type}</p>
+                          <p className="text-[11px] text-charcoal-800/70 truncate">{item.shortBio}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Route Tour Button */}
+                  <div className="p-3 bg-parchment-200 border-t border-bronze-500/20 text-xs flex items-center justify-between">
+                    <span className="text-charcoal-800 font-semibold">Suggested Route:</span>
+                    <button
+                      onClick={() => handleAskAi('Suggest a walking route on the map')}
+                      className="text-moss-900 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <i data-lucide="route" className="w-3.5 h-3.5 text-bronze-600"></i>
+                      Generate AI Tour
+                    </button>
+                  </div>
+                </div>
+
+                {/* LEAFLET MAP CONTAINER */}
+                <div className="flex-1 relative h-1/2 md:h-full bg-parchment-200">
+                  <LeafletMap 
+                    locations={filteredEntities} 
+                    selectedLocation={selectedEntity} 
+                    onSelectLocation={(item) => setSelectedEntity(item)} 
+                  />
+
+                  {/* SELECTED OVERLAY DRAWER */}
+                  {selectedEntity && (
+                    <div className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-parchment-50/95 backdrop-blur-md border border-bronze-500/40 rounded-xl p-5 shadow-2xl z-[1000] space-y-3 animate-in fade-in slide-in-from-bottom-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-bronze-600 tracking-wider">
+                            {selectedEntity.type} • {selectedEntity.sector}
+                          </span>
+                          <h3 className="font-editorial text-xl font-bold text-moss-950">{selectedEntity.name}</h3>
+                          {selectedEntity.years && (
+                            <p className="text-xs text-charcoal-800/70 font-semibold">{selectedEntity.years}</p>
+                          )}
+                        </div>
+                        <button 
+                          onClick={() => setSelectedEntity(null)}
+                          className="text-charcoal-800/50 hover:text-charcoal-900 p-1"
+                        >
+                          <i data-lucide="x" className="w-4 h-4"></i>
+                        </button>
+                      </div>
+
+                      <p className="text-xs text-charcoal-800 leading-relaxed">
+                        {selectedEntity.shortBio}
+                      </p>
+
+                      <div className="pt-2 border-t border-bronze-500/20 flex items-center gap-2">
+                        <button
+                          onClick={() => openAiWithContext(selectedEntity)}
+                          className="flex-1 bg-moss-900 hover:bg-moss-800 text-parchment-100 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition"
+                        >
+                          <i data-lucide="sparkles" className="w-3.5 h-3.5 text-bronze-400"></i>
+                          <span>Ask MEMORIA AI</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            )}
+
+            {/* VIEW 3: PERSONALITIES GALLERY */}
+            {activeTab === 'personalities' && (
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-widest text-bronze-600">Pioneers & Figures</span>
+                  <h2 className="font-editorial text-3xl font-bold text-moss-950">Historical Personalities</h2>
+                  <p className="text-sm text-charcoal-800/70">
+                    Writers, painters, architects, and leaders who shaped Brazil's cultural identity.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {HISTORICAL_ENTITIES.filter(item => item.category === 'personality').map((person) => (
+                    <div 
+                      key={person.id}
+                      className="bg-parchment-50 rounded-xl border border-bronze-500/30 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col"
+                    >
+                      <div className="h-48 bg-charcoal-900 relative">
+                        <img src={person.image} alt={person.name} className="w-full h-full object-cover opacity-90" />
+                        <span className="absolute bottom-3 left-3 bg-moss-950/90 text-bronze-400 border border-bronze-500/30 text-[10px] px-2.5 py-0.5 rounded font-bold">
+                          {person.years}
+                        </span>
+                      </div>
+                      
+                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                        <div>
+                          <h3 className="font-editorial text-xl font-bold text-moss-950">{person.name}</h3>
+                          <p className="text-xs text-bronze-600 font-bold mb-2">{person.type}</p>
+                          <p className="text-xs text-charcoal-800 leading-relaxed mb-3">
+                            {person.fullBio}
+                          </p>
+                          
+                          {/* Sources citation tags */}
+                          {person.sources && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-charcoal-800/60 uppercase tracking-wider">Archival Sources:</span>
+                              {person.sources.map((src, i) => (
+                                <div key={i} className="text-[10px] bg-parchment-200 text-charcoal-900 p-1.5 rounded border border-bronze-500/20 flex items-center justify-between">
+                                  <span className="font-medium">{src.doc}</span>
+                                  <span className="font-mono text-bronze-700">p. {src.page}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-3 border-t border-bronze-500/20 flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedEntity(person);
+                              setActiveTab('map');
+                            }}
+                            className="text-xs text-moss-900 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <i data-lucide="map-pin" className="w-3.5 h-3.5 text-bronze-600"></i>
+                            Locate
+                          </button>
+                          
+                          <button
+                            onClick={() => openAiWithContext(person)}
+                            className="bg-moss-900 hover:bg-moss-800 text-parchment-100 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1"
+                          >
+                            <i data-lucide="sparkles" className="w-3 h-3 text-bronze-400"></i>
+                            Ask AI
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 4: SCULPTURES & ARTWORKS */}
+            {activeTab === 'sculptures' && (
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-widest text-bronze-600">Open-Air Museum</span>
+                  <h2 className="font-editorial text-3xl font-bold text-moss-950">Sculptures & Monuments</h2>
+                  <p className="text-sm text-charcoal-800/70">
+                    Art Déco, modern, and neoclassical monuments carved by South American and European masters.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {HISTORICAL_ENTITIES.filter(item => item.category === 'sculpture').map((item) => (
+                    <div 
+                      key={item.id}
+                      className="bg-parchment-50 rounded-xl border border-bronze-500/30 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col md:flex-row"
+                    >
+                      <div className="w-full md:w-52 h-48 md:h-auto bg-charcoal-900 shrink-0 relative">
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover opacity-90" />
+                      </div>
+                      
+                      <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-bronze-600 tracking-wider">
+                            {item.type} • {item.years}
+                          </span>
+                          <h3 className="font-editorial text-xl font-bold text-moss-950">{item.name}</h3>
+                          <p className="text-xs text-charcoal-800 leading-relaxed mt-2">
+                            {item.fullBio}
+                          </p>
+                          <div className="mt-3 text-xs bg-parchment-200/80 p-2.5 rounded border border-bronze-500/20">
+                            <strong className="text-moss-950">Art Technique:</strong> {item.artisticDetails}
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-bronze-500/20 flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedEntity(item);
+                              setActiveTab('map');
+                            }}
+                            className="text-xs text-moss-900 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <i data-lucide="map-pin" className="w-3.5 h-3.5 text-bronze-600"></i>
+                            View on Map
+                          </button>
+                          
+                          <button
+                            onClick={() => openAiWithContext(item)}
+                            className="bg-moss-900 hover:bg-moss-800 text-parchment-100 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1"
+                          >
+                            <i data-lucide="sparkles" className="w-3 h-3 text-bronze-400"></i>
+                            Ask AI
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 5: GUIDED ROUTES */}
+            {activeTab === 'routes' && (
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-widest text-bronze-600">Thematic Itineraries</span>
+                  <h2 className="font-editorial text-3xl font-bold text-moss-950">Guided Historical Tours</h2>
+                  <p className="text-sm text-charcoal-800/70">
+                    Follow curated walking trails through Consolação Cemetery based on art movements and literature.
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  {GUIDED_ROUTES.map((route) => (
+                    <div 
+                      key={route.id}
+                      className="bg-parchment-50 rounded-xl border border-bronze-500/30 p-6 shadow-sm hover:shadow-md transition space-y-4"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-bronze-500/20 pb-4">
+                        <div>
+                          <div className="flex items-center gap-3 text-xs font-bold text-bronze-600 uppercase tracking-wider mb-1">
+                            <span>⏱️ {route.duration}</span>
+                            <span>•</span>
+                            <span>📍 {route.distance}</span>
+                            <span>•</span>
+                            <span>{route.category}</span>
+                          </div>
+                          <h3 className="font-editorial text-2xl font-bold text-moss-950">{route.title}</h3>
+                          <p className="text-xs text-charcoal-800/80 mt-1">{route.description}</p>
+                        </div>
+
+                        <button 
+                          onClick={() => handleAskAi(`Guide me step-by-step through the ${route.title}`)}
+                          className="bg-moss-900 hover:bg-moss-800 text-parchment-100 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center gap-2 shrink-0"
+                        >
+                          <i data-lucide="navigation" className="w-3.5 h-3.5 text-bronze-400"></i>
+                          <span>Start AI Route</span>
+                        </button>
+                      </div>
+
+                      {/* Route Timeline Stops */}
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-bold text-charcoal-800/60 uppercase tracking-wider">Itinerary Highlights:</span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {route.stops.map((stop, idx) => (
+                            <div key={idx} className="bg-parchment-200/70 p-3 rounded-lg border border-bronze-500/20 text-xs flex items-center gap-3">
+                              <span className="w-6 h-6 rounded-full bg-moss-900 text-bronze-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
+                                {idx + 1}
+                              </span>
+                              <div>
+                                <strong className="text-moss-950 font-serif block">{stop.title}</strong>
+                                <span className="text-[10px] text-bronze-700 font-semibold">{stop.type} • {stop.sector}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* MEMORIA AI DRAWER */}
+          {isAiOpen && (
+            <div className="fixed inset-0 z-50 flex justify-end bg-charcoal-950/60 backdrop-blur-sm animate-in fade-in">
+              <div className="w-full max-w-lg bg-parchment-100 h-full shadow-2xl flex flex-col border-l border-bronze-500/40 relative">
+                
+                {/* AI HEADER */}
+                <div className="p-4 bg-moss-950 text-parchment-100 border-b border-bronze-500/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-bronze-500/20 flex items-center justify-center text-bronze-400 border border-bronze-500/40">
+                      <i data-lucide="sparkles" className="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <h3 className="font-editorial text-lg font-bold text-parchment-50 flex items-center gap-2">
+                        MEMORIA AI
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-sans px-1.5 py-0.5 rounded uppercase font-bold">
+                          Grounded RAG
+                        </span>
+                      </h3>
+                      <p className="text-[10px] text-parchment-300">Gemma 4 • Primary Source Archival Guide</p>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setIsAiOpen(false)}
+                    className="text-parchment-300 hover:text-white p-1 rounded-md"
+                  >
+                    <i data-lucide="x" className="w-5 h-5"></i>
+                  </button>
+                </div>
+
+                {/* Context Badge */}
+                {aiContextEntity && (
+                  <div className="bg-bronze-500/15 px-4 py-2 border-b border-bronze-500/20 text-xs flex items-center justify-between">
+                    <span className="text-moss-900 font-semibold truncate">
+                      Bound Context: <strong>{aiContextEntity.name}</strong>
+                    </span>
+                    <button 
+                      onClick={() => setAiContextEntity(null)}
+                      className="text-bronze-700 hover:underline text-[10px] font-bold uppercase"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+
+                {/* CHAT MESSAGES CONTAINER */}
+                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                  {chatMessages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                    >
+                      <div
+                        className={`max-w-[88%] rounded-2xl p-4 text-xs leading-relaxed space-y-2 shadow-sm ${
+                          msg.sender === 'user'
+                            ? 'bg-moss-900 text-parchment-100 rounded-br-none font-medium'
+                            : msg.isUnverified
+                            ? 'bg-amber-50 text-amber-950 border border-amber-300 rounded-bl-none'
+                            : 'bg-parchment-50 text-charcoal-900 border border-bronze-500/30 rounded-bl-none'
+                        }`}
+                      >
+                        <p className="whitespace-pre-line font-sans">
+                          {msg.text}
+                        </p>
+
+                        {/* RAG CITATION SOURCES */}
+                        {msg.citations && msg.citations.length > 0 && (
+                          <div className="pt-2 border-t border-bronze-500/20 space-y-1.5">
+                            <span className="text-[9px] uppercase font-bold text-bronze-600 tracking-wider flex items-center gap-1">
+                              <i data-lucide="file-check" className="w-3 h-3"></i>
+                              Verified Archival Sources:
+                            </span>
+                            {msg.citations.map((cit, idx) => (
+                              <div key={idx} className="bg-parchment-200/90 text-[10px] p-2 rounded border border-bronze-500/20 font-medium flex items-center justify-between">
+                                <div>
+                                  <strong className="text-moss-950">{cit.doc}</strong>
+                                  <p className="text-charcoal-800/70 text-[9px]">{cit.author}</p>
+                                </div>
+                                <span className="bg-bronze-500/20 text-bronze-800 px-1.5 py-0.5 rounded font-mono text-[9px]">
+                                  p. {cit.page}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Thinking Status */}
+                  {isAiThinking && (
+                    <div className="flex items-center gap-2 text-xs text-bronze-700 font-semibold p-2">
+                      <div className="w-2 h-2 rounded-full bg-bronze-500 animate-ping"></div>
+                      <span>Retrieving archival documents & verified citations...</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI INPUT FORM */}
+                <div className="p-3 bg-parchment-200 border-t border-bronze-500/30">
+                  <div className="flex items-center gap-2 bg-parchment-50 rounded-xl border border-bronze-500/40 p-1.5">
+                    <input
+                      type="text"
+                      placeholder="Ask about tomb locations, artists, or history..."
+                      value={aiInput}
+                      onChange={(e) => setAiInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAskAi()}
+                      className="flex-1 bg-transparent px-2 text-xs outline-none text-charcoal-900 placeholder:text-charcoal-800/50"
+                    />
+                    <button
+                      onClick={() => handleAskAi()}
+                      className="bg-moss-900 hover:bg-moss-800 text-parchment-100 p-2 rounded-lg text-xs font-bold transition"
+                    >
+                      <i data-lucide="send" className="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-center text-charcoal-800/60 mt-2 font-medium">
+                    Strictly grounded in verified primary documents. Halucinations are prevented.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* FOOTER */}
+          <footer className="border-t border-bronze-500/20 bg-parchment-200 mt-auto px-4 py-8 text-xs text-charcoal-800/80">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+              <div>
+                <p className="font-editorial font-bold text-moss-950 text-base">MEMORIA</p>
+                <p>Open Source Historical & Cultural Discovery Platform.</p>
+              </div>
+              <p className="text-center md:text-right text-[11px] leading-relaxed">
+                "We are not building a map of the dead. We are building a way for the living to remember."<br/>
+                São Paulo, Brazil • International Heritage Innovation Initiative
+              </p>
+            </div>
+          </footer>
+
+        </div>
+      );
+    }
+
+    // --- LEAFLET MAP COMPONENT ---
+    function LeafletMap({ locations, selectedLocation, onSelectLocation }) {
+      const mapRef = useRef(null);
+      const leafletInstance = useRef(null);
+      const markersRef = useRef({});
+
+      useEffect(() => {
+        if (!mapRef.current) return;
+
+        // Initialize Map centered on Consolação Cemetery (-23.5489, -46.6558)
+        if (!leafletInstance.current) {
+          leafletInstance.current = L.map(mapRef.current, {
+            center: [-23.5489, -46.6558],
+            zoom: 17,
+            zoomControl: false
+          });
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors | MEMORIA Archival'
+          }).addTo(leafletInstance.current);
+
+          L.control.zoom({ position: 'topright' }).addTo(leafletInstance.current);
+        }
+
+        const map = leafletInstance.current;
+
+        // Clear existing markers
+        Object.values(markersRef.current).forEach(marker => marker.remove());
+        markersRef.current = {};
+
+        // Add Markers for locations
+        locations.forEach(loc => {
+          const isSelected = selectedLocation?.id === loc.id;
+          
+          const iconHtml = `
+            <div style="
+              background-color: ${loc.category === 'personality' ? '#1B3B2B' : '#9E7B3B'};
+              color: #F9F6F0;
+              width: ${isSelected ? '34px' : '28px'};
+              height: ${isSelected ? '34px' : '28px'};
+              border-radius: 50%;
+              border: 2px solid #C5A059;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+              font-family: 'Playfair Display', serif;
+              font-weight: bold;
+              font-size: ${isSelected ? '14px' : '12px'};
+              transition: all 0.2s;
+            ">
+              ${loc.name.charAt(0)}
+            </div>
+          `;
+
+          const customIcon = L.divIcon({
+            html: iconHtml,
+            className: 'custom-marker',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
+
+          const marker = L.marker(loc.coords, { icon: customIcon }).addTo(map);
+
+          marker.on('click', () => {
+            onSelectLocation(loc);
+          });
+
+          markersRef.current[loc.id] = marker;
+        });
+
+      }, [locations, selectedLocation]);
+
+      // Pan map when location selected
+      useEffect(() => {
+        if (selectedLocation && leafletInstance.current) {
+          leafletInstance.current.flyTo(selectedLocation.coords, 18, { duration: 1.2 });
+        }
+      }, [selectedLocation]);
+
+      return <div ref={mapRef} className="w-full h-full z-0" />;
+    }
+
+    // Render React App
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
